@@ -1,4 +1,8 @@
+// Description: A simple TCP listener and dialer that can be used to
+// create a simple TCP server and client.
 package teasipper
+
+
 
 /*
 
@@ -21,56 +25,10 @@ import (
 )
 
 var wg sync.WaitGroup
-/*
-func main() {
-	logger := log.Default()
-	logger.Println("Starting...")
-	main_context, cancel := context.WithCancel(context.Background())
-	go gs.GracefulShutdown(logger, cancel)
-
-	tcp := NewEndpoint("0.0.0.0", 2137, &main_context, logger)
-	tcp_d := NewEndpoint("127.0.0.1", 2139, &main_context, logger)
-
-	send_to_listener := make(chan []byte)
-	send_to_dialer := make(chan []byte)
-	recv_from_listener, _ := tcp.Listen(main_context, "0.0.0.0:2137", &send_to_listener)
-	recv_from_dialer, _ := tcp_d.Dial(main_context, "0.0.0.0:2138", &send_to_dialer)
-
-	handle := func(ctx context.Context, recv_chan *chan []byte, send_chan *chan []byte) {
-
-		defer wg.Done()
-		if recv_chan == nil || send_chan == nil {
-			return
-		}
-		stop := false
-		for !stop {
-			select {
-			case r, ok := <-*recv_chan:
-				if !ok {
-					log.Println("Endpoint closed the recv_chan, exiting...")
-					stop = true
-					break
-				}
-				//log.Printf("[INFO] Received: %s", r)
-				str := string(r[:])
-				str = strings.TrimSpace(str)
-				*send_chan <- r
-			case <-ctx.Done():
-				//time.Sleep(time.Second)
-				stop = true
-				break
-			}
-		}
-		close(*send_chan)
-	}
-	wg.Add(2)
-	go handle(main_context, recv_from_listener, &send_to_listener)
-	go handle(main_context, recv_from_dialer, &send_to_dialer)
-	wg.Wait()
-}
-*/
 // ---- Tcp Endpoint ---- //
 
+// An endpoint is a wrapper over Listener and Dialer to store 
+// connection data. Create a new Endpoint instance using the NewEndpoint function.
 type Endpoint struct {
 	Guid      guid.Guid
 	listener  net.Listener
@@ -87,7 +45,8 @@ type Endpoint struct {
 	send_chan *chan []byte
 }
 
-func NewEndpoint(ipAddr string, port uint16, ctx *context.Context, logger *log.Logger) *Endpoint {
+// Creates a new Endpoint
+func NewEndpoint(logger *log.Logger) *Endpoint {
 	return &Endpoint{
 		Guid:   *guid.New(),
 		logger: logger,
@@ -95,10 +54,12 @@ func NewEndpoint(ipAddr string, port uint16, ctx *context.Context, logger *log.L
 	}
 }
 
+
 func (this *Endpoint) log(s string, a ...any) {
 	a = append([]any{this.Guid.String()[:4]}, a)
 	this.logger.Printf("%s | "+s, a...)
 }
+
 
 func (this *Endpoint) ListenerStop(ctx context.Context) {
 	select {
@@ -122,10 +83,12 @@ func (this *Endpoint) DialerStop(ctx context.Context) {
 	}
 }
 
-// do it the "GO" way:
-// Listen should not be started as a goroutine
-// but start its own goroutine and return a channel that
-// will receive the packets
+// Listen for TCP connection on given addr.
+// Takes a channel on which the caller will send data to be sent to a client.
+// Closure of this channel will stop the Listener and free all the resources.
+// If you need to Listen again after that, instantiate a new Listener
+// Returns a channel on which the received data will be sent.
+
 func (this *Endpoint) Listen(ctx context.Context, addr string, chan_for_data_to_send *chan []byte) (*chan []byte, error) {
 	this.recv_chan = make(chan []byte, 64)
 	this.send_chan = chan_for_data_to_send
