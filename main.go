@@ -88,7 +88,6 @@ func (this *Endpoint) DialerStop(ctx context.Context) {
 // Closure of this channel will stop the Listener and free all the resources.
 // If you need to Listen again after that, instantiate a new Listener
 // Returns a channel on which the received data will be sent.
-
 func (this *Endpoint) Listen(ctx context.Context, addr string, chan_for_data_to_send *chan []byte) (*chan []byte, error) {
 	this.recv_chan = make(chan []byte, 64)
 	this.send_chan = chan_for_data_to_send
