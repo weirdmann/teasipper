@@ -4,14 +4,6 @@ package teasipper
 
 
 
-/*
-
-TODO: There is some error with the Dialer locking the graceful shutdown
-when it has some leftover values in the send channel but
-it didn't establish the connection...
-Look into it.
-
-*/
 import (
 	"context"
 	"errors"
@@ -19,12 +11,10 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync"
 	"time"
 	"github.com/beevik/guid"
 )
 
-var wg sync.WaitGroup
 // ---- Tcp Endpoint ---- //
 
 // An endpoint is a wrapper over Listener and Dialer to store 
@@ -79,7 +69,6 @@ func (this *Endpoint) DialerStop(ctx context.Context) {
 		for _, tcpPeer := range this.peers {
 			tcpPeer.Close()
 		}
-		//	close(*this.recv_chan)
 	}
 }
 
