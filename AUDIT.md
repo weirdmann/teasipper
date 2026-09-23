@@ -131,8 +131,8 @@ Zakresy czasu wyniosły odpowiednio 8 354–9 337, 9 594–14 028 i
 maszynie; nie przypisujemy różnicy względem wcześniejszej tabeli samemu
 rozszerzeniu. Wszystkie ustalone ścieżki nadal wykazują 0 B/op i
 0 allocs/op. `go test ./... -count=10`, `go vet ./...` oraz kompilacja testów
-dla Linux przeszły; detektor wyścigów nadal nie mógł uruchomić testów bez
-kompilatora C.
+dla Linux przeszły. `CGO_ENABLED=1 go test -race ./... -count=10`
+przeszedł w lokalnym WSL (Linux/amd64, Go 1.25.0, gcc 11.4.0).
 
 ## Odtworzenie
 
@@ -166,10 +166,11 @@ Pop-Location
 Przed zmianami `go test ./...` i `go vet ./...` przechodziły, ale repozytorium
 nie miało żadnych testów. Próba `go test -race ./...` bez testów dawała pozorny
 sukces (`[no test files]`). Po dodaniu wykonywalnych testów `go test -race`
-nie może zbudować `runtime/cgo`: w dostępnym środowisku brak kompilatora
-`gcc`/`clang` (`cgo: C compiler "gcc" not found`). Nie uznajemy więc detektora
-wyścigów za zaliczony. Warto uruchomić te same testy z `-race` w CI z
-kompilatorem C.
+nie może zbudować `runtime/cgo` na Windows: host nie ma kompilatora
+`gcc`/`clang` (`cgo: C compiler "gcc" not found`). W lokalnym WSL z gcc
+detektor wyścigów przeszedł 10 pełnych przebiegów na Go 1.25.0. Nie jest to
+sprawdzenie wszystkich harmonogramów ani wszystkich platform; warto zachować
+ten test w CI z kompilatorem C.
 
 Po zmianach formatowanie, `go vet ./...`, pełne `go test ./... -count=3`
 oraz 30 powtórzeń testów `net.Pipe`/fake i równoległego `Close` przeszły.
