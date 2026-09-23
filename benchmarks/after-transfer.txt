@@ -1,0 +1,21 @@
+goos: windows
+goarch: amd64
+pkg: github.com/weirdmann/teasipper
+cpu: Intel(R) Core(TM) Ultra 7 265H
+BenchmarkEndpointOneWay64-16             	  130852	      8865 ns/op	   7.22 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64-16             	  133633	      9195 ns/op	   6.96 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64-16             	  131464	      9416 ns/op	   6.80 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64-16             	  119854	     10762 ns/op	   5.95 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64-16             	  133278	      8855 ns/op	   7.23 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay4096-16           	  122512	      9872 ns/op	 414.91 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay4096-16           	  106684	     13841 ns/op	 295.94 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay4096-16           	   84400	     15364 ns/op	 266.60 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay4096-16           	   78838	     13061 ns/op	 313.60 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay4096-16           	  112538	     14093 ns/op	 290.64 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  105274	     12450 ns/op	   5.14 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	   83188	     14679 ns/op	   4.36 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	   91179	     11332 ns/op	   5.65 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  133470	     12842 ns/op	   4.98 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	   72630	     38023 ns/op	   1.68 MB/s	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/weirdmann/teasipper	22.888s

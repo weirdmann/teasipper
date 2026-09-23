@@ -1,0 +1,11 @@
+goos: windows
+goarch: amd64
+pkg: github.com/weirdmann/teasipper
+cpu: Intel(R) Core(TM) Ultra 7 265H
+BenchmarkEndpointOneWay64Timeout1s-16    	  104626	     11356 ns/op	   5.64 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  114148	     10687 ns/op	   5.99 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  103856	     10781 ns/op	   5.94 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  108711	     12068 ns/op	   5.30 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEndpointOneWay64Timeout1s-16    	  101455	     12551 ns/op	   5.10 MB/s	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/weirdmann/teasipper	8.100s
