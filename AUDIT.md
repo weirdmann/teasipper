@@ -24,8 +24,9 @@ strumieniem bajtów, dlatego fuzz test parsera nie ma tu zastosowania.
 ## Kontrakt konfiguracji, resetu i współbieżności
 
 - `NewEndpoint(Config)` kopiuje i waliduje ustawienia. `Mode` wybiera klienta lub
-  serwer; `Address`, `Network`, `LocalAddress`, `DialTimeout`, `ReadTimeout` i
-  `WriteTimeout` są stałe w działającej sesji. `LocalAddress` przyjmuje wyłącznie
+  serwer; `Address`, `Network`, `LocalAddress`, `DialTimeout`, `ReadTimeout`,
+  `WriteTimeout`, `NoDelay` i `KeepAlivePeriod` są stałe w działającej sesji.
+  `LocalAddress` przyjmuje wyłącznie
   numeryczny lokalny IP (lub pusty host) i port, aby jego rozwiązywanie nie
   opóźniało anulowania. `Config()` zwraca kopię.
 - `Start(ctx)` uruchamia zatrzymany endpoint. Kontekst obejmuje zestawienie
@@ -47,6 +48,10 @@ strumieniem bajtów, dlatego fuzz test parsera nie ma tu zastosowania.
   połączenia.
 - Konfigurowalne `ReadTimeout`/`WriteTimeout` obejmują aktywny odczyt lub zapis
   po uzyskaniu bramki. Kontekst obejmuje również oczekiwanie w kolejce.
+  Ręczne `SetReadDeadline`/`SetWriteDeadline` utrzymują absolutne deadline'y
+  przez kolejne wywołania i mogą przerwać blokujące I/O; `Conn` implementuje
+  `net.Conn`. Najwcześniejszy z ręcznego deadline'u, timeoutu operacji i
+  deadline'u kontekstu obowiązuje bieżące wywołanie.
   Własność `[]byte` pozostaje u wywołującego; musi on utrzymać bufor do końca
   synchronicznego wywołania. Połączenia zaakceptowane przez serwer trzeba
   zamknąć, gdy aplikacja kończy ich używanie. Nie ma wewnętrznej puli buforów,
@@ -100,6 +105,34 @@ utworzenie socketu, mapy i bramek nowej sesji; nie są kosztem ustalonego I/O.
 Reset lokalny i gotowość klienta są rozdzielone, ponieważ czas ponownego
 połączenia zależy od sieci i nie ma stałej granicy wyrażonej samym kosztem
 lokalnego zamknięcia.
+
+### Rozszerzenie dla sorter-gateway
+
+Commit `b7f3dcd` dodał trwałe absolutne deadline'y `net.Conn` i opcje TCP
+`NoDelay` oraz `KeepAlivePeriod`. Gateway ustawia deadline całej ramki, więc
+timeout każdej pojedynczej operacji nie zastępuje tego kontraktu. Testy
+potwierdzają przerwanie zablokowanego I/O, zachowanie ręcznego deadline'u po
+anulowaniu kontekstu oraz konfigurację socketu po dial i accept.
+
+Ponowny pomiar tej wersji w tym samym środowisku: Go 1.26.3, Windows/amd64,
+Intel Core Ultra 7 265H, TCP loopback, 5 próbek po 1 s, bez detektora wyścigów.
+Poniżej mediana; surowe próbki zapisano w
+`benchmarks/after-gateway-extension.txt` i
+`benchmarks/after-gateway-extension-timeout.txt`.
+
+| Ścieżka | ns/op | B/op | allocs/op | MB/s |
+| --- | ---: | ---: | ---: | ---: |
+| TCP 64 B, bez timeoutu | 8 683 | 0 | 0 | 7,37 |
+| TCP 4096 B, bez timeoutu | 10 410 | 0 | 0 | 393,49 |
+| TCP 64 B, timeout 1 s na odczyt/zapis | 11 356 | 0 | 0 | 5,64 |
+
+Zakresy czasu wyniosły odpowiednio 8 354–9 337, 9 594–14 028 i
+10 687–12 551 ns/op. Ponowny pomiar ma zwykłą zmienność na współdzielonej
+maszynie; nie przypisujemy różnicy względem wcześniejszej tabeli samemu
+rozszerzeniu. Wszystkie ustalone ścieżki nadal wykazują 0 B/op i
+0 allocs/op. `go test ./... -count=10`, `go vet ./...` oraz kompilacja testów
+dla Linux przeszły; detektor wyścigów nadal nie mógł uruchomić testów bez
+kompilatora C.
 
 ## Odtworzenie
 
