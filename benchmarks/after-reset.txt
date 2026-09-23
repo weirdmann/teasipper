@@ -1,0 +1,16 @@
+goos: windows
+goarch: amd64
+pkg: github.com/weirdmann/teasipper
+cpu: Intel(R) Core(TM) Ultra 7 265H
+BenchmarkEndpointServerResetLocal-16    	     200	     72498 ns/op	     948 B/op	      15 allocs/op
+BenchmarkEndpointServerResetLocal-16    	     200	     68876 ns/op	     948 B/op	      15 allocs/op
+BenchmarkEndpointServerResetLocal-16    	     200	     78734 ns/op	     948 B/op	      15 allocs/op
+BenchmarkEndpointServerResetLocal-16    	     200	     74986 ns/op	     948 B/op	      15 allocs/op
+BenchmarkEndpointServerResetLocal-16    	     200	     76254 ns/op	     948 B/op	      15 allocs/op
+BenchmarkEndpointClientResetReady-16    	     200	    246102 ns/op	    3152 B/op	      43 allocs/op
+BenchmarkEndpointClientResetReady-16    	     200	    240806 ns/op	    3152 B/op	      43 allocs/op
+BenchmarkEndpointClientResetReady-16    	     200	    214045 ns/op	    3152 B/op	      43 allocs/op
+BenchmarkEndpointClientResetReady-16    	     200	    229638 ns/op	    3152 B/op	      43 allocs/op
+BenchmarkEndpointClientResetReady-16    	     200	    213331 ns/op	    3152 B/op	      43 allocs/op
+PASS
+ok  	github.com/weirdmann/teasipper	0.643s

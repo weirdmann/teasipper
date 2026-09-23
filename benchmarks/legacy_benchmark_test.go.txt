@@ -1,0 +1,58 @@
+package teasipper
+
+import (
+    "bytes"
+    "context"
+    "io"
+    "log"
+    "sync"
+    "testing"
+    "time"
+)
+
+type benchmarkLogWriter struct {
+    ready chan struct{}
+    once sync.Once
+}
+
+func (w *benchmarkLogWriter) Write(p []byte) (int, error) {
+    if bytes.Contains(p, []byte("New TCP Peer connected")) {
+        w.once.Do(func() { close(w.ready) })
+    }
+    return len(p), nil
+}
+
+func BenchmarkEndpointOneWay64(b *testing.B) { benchmarkEndpointOneWay(b, 64) }
+func BenchmarkEndpointOneWay4096(b *testing.B) { benchmarkEndpointOneWay(b, 4096) }
+
+func benchmarkEndpointOneWay(b *testing.B, size int) {
+    writer := &benchmarkLogWriter{ready: make(chan struct{})}
+    logger := log.New(writer, "", 0)
+    ctx, _ := context.WithCancel(context.Background())
+    server := NewEndpoint(logger)
+    serverSend := make(chan []byte)
+    serverRecv, err := server.Listen(ctx, "127.0.0.1:0", &serverSend)
+    if err != nil { b.Fatal(err) }
+    client := NewEndpoint(log.New(io.Discard, "", 0))
+    clientSend := make(chan []byte)
+    if _, err := client.Dial(ctx, server.listener.Addr().String(), &clientSend); err != nil { b.Fatal(err) }
+    select {
+    case <-writer.ready:
+    case <-time.After(5 * time.Second): b.Fatal("server did not accept client")
+    }
+    payload := make([]byte, size)
+    transfer := func() {
+        clientSend <- payload
+        remaining := size
+        for remaining > 0 {
+            data := <-*serverRecv
+            remaining -= len(data)
+        }
+    }
+    transfer()
+    b.ReportAllocs()
+    b.SetBytes(int64(size))
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ { transfer() }
+    b.StopTimer()
+}
