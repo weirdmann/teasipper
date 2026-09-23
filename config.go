@@ -28,13 +28,15 @@ var (
 // Config is copied at construction and reset. Active sessions never observe
 // changes to a Config held by the caller.
 type Config struct {
-	Mode         Mode
-	Network      string        // "tcp" (default), "tcp4", or "tcp6"
-	Address      string        // listen address in server mode; remote address in client mode
-	LocalAddress string        // optional client bind address
-	DialTimeout  time.Duration // client connection setup; zero uses the context only
-	ReadTimeout  time.Duration // per Read call; zero means no timeout
-	WriteTimeout time.Duration // per Write call; zero means no timeout
+	Mode            Mode
+	Network         string        // "tcp" (default), "tcp4", or "tcp6"
+	Address         string        // listen address in server mode; remote address in client mode
+	LocalAddress    string        // optional client bind address
+	DialTimeout     time.Duration // client connection setup; zero uses the context only
+	ReadTimeout     time.Duration // per Read call; zero means no timeout
+	WriteTimeout    time.Duration // per Write call; zero means no timeout
+	NoDelay         bool          // true explicitly enables TCP_NODELAY; false keeps Go's default
+	KeepAlivePeriod time.Duration // positive enables keepalive with this period; zero keeps Go's default
 }
 
 func normalizeConfig(cfg Config) (Config, error) {
@@ -72,6 +74,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 	}
 	if cfg.DialTimeout < 0 || cfg.ReadTimeout < 0 || cfg.WriteTimeout < 0 {
 		return Config{}, errors.New("teasipper: timeouts must not be negative")
+	}
+	if cfg.KeepAlivePeriod < 0 {
+		return Config{}, errors.New("teasipper: KeepAlivePeriod must not be negative")
 	}
 	return cfg, nil
 }

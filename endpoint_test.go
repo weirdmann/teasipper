@@ -841,6 +841,7 @@ func TestConfigValidationAndRejectedReset(t *testing.T) {
 		{"negative dial timeout", Config{Mode: ModeClient, Address: "127.0.0.1:1", DialTimeout: -time.Second}},
 		{"negative read timeout", Config{Mode: ModeServer, Address: "127.0.0.1:0", ReadTimeout: -time.Second}},
 		{"negative write timeout", Config{Mode: ModeServer, Address: "127.0.0.1:0", WriteTimeout: -time.Second}},
+		{"negative keepalive period", Config{Mode: ModeServer, Address: "127.0.0.1:0", KeepAlivePeriod: -time.Second}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := NewEndpoint(tc.cfg); err == nil {

@@ -3,6 +3,7 @@ package teasipper
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -155,9 +156,14 @@ func (e *Endpoint) start(ctx context.Context) error {
 			var raw net.Conn
 			raw, err = (&net.Dialer{Timeout: cfg.DialTimeout, LocalAddr: local}).DialContext(setupCtx, cfg.Network, cfg.Address)
 			if err == nil {
-				s = &session{cfg: cfg, mode: ModeClient, conns: make(map[*Conn]struct{})}
-				s.client = newConn(raw, s, cfg)
-				s.conns[s.client] = struct{}{}
+				err = configureTCP(raw.(*net.TCPConn), cfg)
+				if err != nil {
+					_ = raw.Close()
+				} else {
+					s = &session{cfg: cfg, mode: ModeClient, conns: make(map[*Conn]struct{})}
+					s.client = newConn(raw, s, cfg)
+					s.conns[s.client] = struct{}{}
+				}
 			}
 		}
 	}
@@ -245,6 +251,10 @@ func (e *Endpoint) Accept(ctx context.Context) (*Conn, error) {
 		}
 		return nil, err
 	}
+	if err := configureTCP(raw, s.cfg); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
 	c := newConn(raw, s, s.cfg)
 	if !s.register(c) {
 		_ = c.Close()
@@ -328,4 +338,21 @@ func (s *session) close() {
 	for c := range conns {
 		_ = c.Close()
 	}
+}
+
+func configureTCP(conn *net.TCPConn, cfg Config) error {
+	if cfg.NoDelay {
+		if err := conn.SetNoDelay(true); err != nil {
+			return fmt.Errorf("teasipper: set TCP_NODELAY: %w", err)
+		}
+	}
+	if cfg.KeepAlivePeriod > 0 {
+		if err := conn.SetKeepAlive(true); err != nil {
+			return fmt.Errorf("teasipper: enable TCP keepalive: %w", err)
+		}
+		if err := conn.SetKeepAlivePeriod(cfg.KeepAlivePeriod); err != nil {
+			return fmt.Errorf("teasipper: set TCP keepalive period: %w", err)
+		}
+	}
+	return nil
 }

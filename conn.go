@@ -13,13 +13,28 @@ import (
 // One Read and one Write may run concurrently. Calls in the same direction
 // are serialized so their deadlines cannot interfere with each other.
 type Conn struct {
-	raw          net.Conn
-	session      *session
-	readTimeout  time.Duration
-	writeTimeout time.Duration
-	readGate     chan struct{}
-	writeGate    chan struct{}
-	closeOnce    sync.Once
+	raw           net.Conn
+	session       *session
+	readTimeout   time.Duration
+	writeTimeout  time.Duration
+	readGate      chan struct{}
+	writeGate     chan struct{}
+	readDeadline  deadlineState
+	writeDeadline deadlineState
+	closeOnce     sync.Once
+}
+
+var _ net.Conn = (*Conn)(nil)
+
+// deadlineState combines an absolute, caller-managed deadline with the limit
+// of one active operation. A canceled context wins until that operation ends.
+// SetDeadline must be able to interrupt a Read or Write holding its gate, so
+// this mutex is independent of the corresponding I/O gate.
+type deadlineState struct {
+	mu        sync.Mutex
+	manual    time.Time
+	operation time.Time
+	canceled  bool
 }
 
 func newConn(raw net.Conn, s *session, cfg Config) *Conn {
@@ -34,6 +49,28 @@ func newConn(raw net.Conn, s *session, cfg Config) *Conn {
 
 func (c *Conn) LocalAddr() net.Addr  { return c.raw.LocalAddr() }
 func (c *Conn) RemoteAddr() net.Addr { return c.raw.RemoteAddr() }
+
+// SetDeadline sets an absolute deadline for future and pending reads and
+// writes. A zero value removes the caller-managed limit. Configured per-call
+// timeouts and context deadlines may impose an earlier limit.
+func (c *Conn) SetDeadline(t time.Time) error {
+	if err := c.SetReadDeadline(t); err != nil {
+		return err
+	}
+	return c.SetWriteDeadline(t)
+}
+
+// SetReadDeadline sets an absolute deadline that persists across Read calls.
+// It can interrupt a blocked read, including one using ReadContext.
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	return c.readDeadline.setManual(t, c.raw.SetReadDeadline)
+}
+
+// SetWriteDeadline sets an absolute deadline that persists across Write calls.
+// It can interrupt a blocked write, including one using WriteContext.
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	return c.writeDeadline.setManual(t, c.raw.SetWriteDeadline)
+}
 
 // Close is idempotent and unblocks pending I/O on this Conn.
 func (c *Conn) Close() error {
@@ -72,14 +109,14 @@ func (c *Conn) ReadContext(ctx context.Context, p []byte) (int, error) {
 		return c.raw.Read(p)
 	}
 	if ctx.Done() == nil {
-		if err := c.raw.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+		if err := c.readDeadline.start(operationDeadline(ctx, c.readTimeout), c.raw.SetReadDeadline); err != nil {
 			return 0, err
 		}
 		n, err := c.raw.Read(p)
-		_ = c.raw.SetReadDeadline(time.Time{})
+		c.readDeadline.end(c.raw.SetReadDeadline)
 		return n, err
 	}
-	cleanup, err := ioDeadline(ctx, c.readTimeout, c.raw.SetReadDeadline)
+	cleanup, err := c.readDeadline.begin(ctx, c.readTimeout, c.raw.SetReadDeadline)
 	if err != nil {
 		return 0, err
 	}
@@ -110,14 +147,14 @@ func (c *Conn) WriteContext(ctx context.Context, p []byte) (int, error) {
 		return writeAll(c.raw, p)
 	}
 	if ctx.Done() == nil {
-		if err := c.raw.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+		if err := c.writeDeadline.start(operationDeadline(ctx, c.writeTimeout), c.raw.SetWriteDeadline); err != nil {
 			return 0, err
 		}
 		n, err := writeAll(c.raw, p)
-		_ = c.raw.SetWriteDeadline(time.Time{})
+		c.writeDeadline.end(c.raw.SetWriteDeadline)
 		return n, err
 	}
-	cleanup, err := ioDeadline(ctx, c.writeTimeout, c.raw.SetWriteDeadline)
+	cleanup, err := c.writeDeadline.begin(ctx, c.writeTimeout, c.raw.SetWriteDeadline)
 	if err != nil {
 		return 0, err
 	}
@@ -144,20 +181,64 @@ func writeAll(dst io.Writer, p []byte) (int, error) {
 	return total, nil
 }
 
-// ioDeadline installs one deadline for this operation and restores the idle
-// state only after an optional context cancellation callback has finished.
-func ioDeadline(ctx context.Context, timeout time.Duration, set func(time.Time) error) (func(), error) {
-	if timeout == 0 && ctx.Done() == nil {
-		return func() {}, nil
+func (d *deadlineState) effective() time.Time {
+	deadline := d.manual
+	if !d.operation.IsZero() && (deadline.IsZero() || d.operation.Before(deadline)) {
+		deadline = d.operation
 	}
+	if d.canceled {
+		return time.Now()
+	}
+	return deadline
+}
+
+func (d *deadlineState) setManual(t time.Time, set func(time.Time) error) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	previous := d.manual
+	d.manual = t
+	if err := set(d.effective()); err != nil {
+		d.manual = previous
+		return err
+	}
+	return nil
+}
+
+func operationDeadline(ctx context.Context, timeout time.Duration) time.Time {
 	var deadline time.Time
 	if timeout > 0 {
 		deadline = time.Now().Add(timeout)
 	}
-	if d, ok := ctx.Deadline(); ok && (deadline.IsZero() || d.Before(deadline)) {
-		deadline = d
+	if contextDeadline, ok := ctx.Deadline(); ok && (deadline.IsZero() || contextDeadline.Before(deadline)) {
+		deadline = contextDeadline
 	}
-	if err := set(deadline); err != nil {
+	return deadline
+}
+
+func (d *deadlineState) start(operation time.Time, set func(time.Time) error) error {
+	d.mu.Lock()
+	d.operation = operation
+	err := set(d.effective())
+	if err != nil {
+		d.operation = time.Time{}
+	}
+	d.mu.Unlock()
+	return err
+}
+
+func (d *deadlineState) end(set func(time.Time) error) {
+	d.mu.Lock()
+	d.operation = time.Time{}
+	d.canceled = false
+	_ = set(d.effective())
+	d.mu.Unlock()
+}
+
+// begin installs the earliest of the manual, configured, and context
+// deadlines. Cleanup waits for the cancellation callback before restoring the
+// manual deadline, so an old callback cannot poison a later operation.
+func (d *deadlineState) begin(ctx context.Context, timeout time.Duration, set func(time.Time) error) (func(), error) {
+	if err := d.start(operationDeadline(ctx, timeout), set); err != nil {
 		return nil, err
 	}
 	var done chan struct{}
@@ -165,7 +246,10 @@ func ioDeadline(ctx context.Context, timeout time.Duration, set func(time.Time) 
 	if ctx.Done() != nil {
 		done = make(chan struct{})
 		stop = context.AfterFunc(ctx, func() {
-			_ = set(time.Now())
+			d.mu.Lock()
+			d.canceled = true
+			_ = set(d.effective())
+			d.mu.Unlock()
 			close(done)
 		})
 	}
@@ -173,6 +257,6 @@ func ioDeadline(ctx context.Context, timeout time.Duration, set func(time.Time) 
 		if stop != nil && !stop() {
 			<-done
 		}
-		_ = set(time.Time{})
+		d.end(set)
 	}, nil
 }
